@@ -89,6 +89,19 @@ function App() {
     }
   };
 
+  const playQueueItem = async (index: number) => {
+    try {
+      await fetch('/api/queue/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index }),
+      });
+      updateStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const updateStatus = async () => {
     try {
       const statusRes = await fetch('/api/status');
@@ -134,7 +147,7 @@ function App() {
                 />
             </div>
             <div>
-                <Queue items={queue} />
+                <Queue items={queue} onPlay={playQueueItem} />
             </div>
         </div>
       </main>

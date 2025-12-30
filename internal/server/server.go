@@ -36,6 +36,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/queue", s.handleQueue)
 	mux.HandleFunc("/api/queue/add", s.handleQueueAdd)
+	mux.HandleFunc("/api/queue/play", s.handleQueuePlay)
 	mux.HandleFunc("/api/queue/add_batch", s.handleQueueAddBatch)
 	mux.HandleFunc("/api/play_batch", s.handlePlayBatch)
 
@@ -215,6 +216,31 @@ func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// err := s.player.Append(req.URL, req.Title)
+	w.WriteHeader(http.StatusOK)
+}
+
+type QueuePlayRequest struct {
+	Index int `json:"index"`
+}
+
+func (s *Server) handleQueuePlay(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req QueuePlayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.player.PlayIndex(req.Index); err != nil {
+		log.Printf("Queue Play error: %v", err)
+		http.Error(w, "Failed to play queue item", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -152,13 +152,33 @@ func (p *Player) sendCommand(command []interface{}) error {
 	return err
 }
 
-// Play loads and plays a URL
+// Play loads and plays a URL by appending it and then playing it (to avoid clearing playlist)
 func (p *Player) Play(url string, title string) error {
 	p.mutex.Lock()
 	p.currentTitle = title
 	p.mutex.Unlock()
-	// "loadfile", url, "replace" (replaces current track) or "append-play"
-	return p.sendCommand([]interface{}{"loadfile", url, "replace"})
+	// First append
+	if err := p.Append(url, title); err != nil {
+		return err
+	}
+	
+	// Then get playlist size to know the index of the last item
+	playlist, err := p.GetPlaylist()
+	if err != nil {
+		return err
+	}
+	if len(playlist) == 0 {
+		return fmt.Errorf("playlist empty after append")
+	}
+	
+	// Play the last item (0-based index)
+	index := len(playlist) - 1
+	return p.PlayIndex(index)
+}
+
+// PlayIndex plays the item at the specific playlist index
+func (p *Player) PlayIndex(index int) error {
+	return p.sendCommand([]interface{}{"playlist-play-index", index})
 }
 
 // Append adds a URL to the internal playlist
