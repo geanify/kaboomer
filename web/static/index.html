@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaboomer</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1db954">
+</head>
+<body>
+    <header>
+        <h1>Kaboomer</h1>
+    </header>
+
+    <main>
+        <div id="search-container">
+            <input type="text" id="search-input" placeholder="Search song or paste URL...">
+            <button id="search-btn">Go</button>
+        </div>
+
+        <ul id="results">
+            <!-- Results will be injected here -->
+        </ul>
+    </main>
+
+    <footer>
+        <div id="now-playing">Not Playing</div>
+        <div class="controls">
+            <button class="control-btn" id="prev-btn">⏮</button>
+            <button class="control-btn" id="play-pause-btn">⏯</button>
+            <button class="control-btn" id="next-btn">⏭</button>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
+
