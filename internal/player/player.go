@@ -14,10 +14,10 @@ import (
 
 // Player controls the MPV process
 type Player struct {
-	socketPath string
-	ytDlpPath  string
-	cmd        *exec.Cmd
-	mutex      sync.Mutex
+	socketPath   string
+	ytDlpPath    string
+	cmd          *exec.Cmd
+	mutex        sync.Mutex
 	currentTitle string // Simple status tracking
 }
 
@@ -28,14 +28,14 @@ func New(ytDlpPath string) *Player {
 	if runtime.GOOS == "windows" {
 		socketPath = `\\.\pipe\kaboomer_mpv`
 	}
-	
+
 	if ytDlpPath == "" {
 		ytDlpPath = "yt-dlp" // assume in PATH
 	}
 
 	return &Player{
-		socketPath: socketPath,
-		ytDlpPath:  ytDlpPath,
+		socketPath:   socketPath,
+		ytDlpPath:    ytDlpPath,
 		currentTitle: "Idle",
 	}
 }
@@ -74,7 +74,7 @@ func (p *Player) Start() error {
 	p.cmd = exec.Command("mpv", args...)
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr
-	
+
 	// Start in background
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start mpv: %w", err)
@@ -126,17 +126,17 @@ func (p *Player) sendCommand(command []interface{}) error {
 	data = append(data, '\n')
 
 	var conn net.Conn
-	
+
 	// Retry connection logic
 	for i := 0; i < 3; i++ {
 		if runtime.GOOS == "windows" {
-			// Windows named pipes handling would be needed here, 
+			// Windows named pipes handling would be needed here,
 			// usually via "github.com/Microsoft/go-winio" but keeping it simple for now as target is Linux
 			return fmt.Errorf("windows named pipe support not fully implemented in this snippet")
 		} else {
 			conn, err = net.Dial("unix", p.socketPath)
 		}
-		
+
 		if err == nil {
 			break
 		}
@@ -152,17 +152,40 @@ func (p *Player) sendCommand(command []interface{}) error {
 	return err
 }
 
-// Play loads and plays a URL
+// Play loads and plays a URL by appending it and then playing it (to avoid clearing playlist)
 func (p *Player) Play(url string, title string) error {
 	p.mutex.Lock()
 	p.currentTitle = title
 	p.mutex.Unlock()
-	// "loadfile", url, "replace" (replaces current track) or "append-play"
-	return p.sendCommand([]interface{}{"loadfile", url, "replace"})
+	// First append
+	if err := p.Append(url, title); err != nil {
+		return err
+	}
+	
+	// Then get playlist size to know the index of the last item
+	playlist, err := p.GetPlaylist()
+	if err != nil {
+		return err
+	}
+	if len(playlist) == 0 {
+		return fmt.Errorf("playlist empty after append")
+	}
+	
+	// Play the last item (0-based index)
+	index := len(playlist) - 1
+	return p.PlayIndex(index)
+}
+
+// PlayIndex plays the item at the specific playlist index
+func (p *Player) PlayIndex(index int) error {
+	return p.sendCommand([]interface{}{"playlist-play-index", index})
 }
 
 // Append adds a URL to the internal playlist
-func (p *Player) Append(url string) error {
+func (p *Player) Append(url string, title string) error {
+	if title != "" {
+		return p.sendCommand([]interface{}{"loadfile", url, "append", fmt.Sprintf("force-media-title=%s", title)})
+	}
 	return p.sendCommand([]interface{}{"loadfile", url, "append"})
 }
 
@@ -182,23 +205,25 @@ func (p *Player) Prev() error {
 	return p.sendCommand([]interface{}{"playlist-prev"})
 }
 
-// GetProperty fetches a property from mpv
-func (p *Player) GetProperty(prop string) (interface{}, error) {
-	// Simple request-response using a temporary listener would be complex with the current write-only setup.
-	// For a robust implementation, we need to read from the socket. 
-	// Given we are redesigning, let's implement a proper read loop or request/response mechanism.
-	return nil, fmt.Errorf("not implemented yet")
+// Seek seeks to a position in seconds
+func (p *Player) Seek(seconds float64) error {
+	return p.sendCommand([]interface{}{"seek", seconds, "absolute"})
 }
 
-// GetPlaylist fetches the current playlist from mpv
-func (p *Player) GetPlaylist() ([]map[string]interface{}, error) {
-	// We need to send a command and wait for a response.
-	// This requires a significant change to how we handle the socket (reading responses).
-	// For now, let's just implement the send part and read one line.
-	
-	cmd := []interface{}{"get_property", "playlist"}
-	payload := map[string]interface{}{ "command": cmd, "request_id": 1 }
-	data, _ := json.Marshal(payload)
+// sendRequest sends a command and waits for a response
+func (p *Player) sendRequest(command []interface{}) (interface{}, error) {
+	// Use a small random request ID to avoid float64 precision issues in JSON
+	// UnixNano is too large for float64 exact representation
+	reqID := int(time.Now().Unix() % 1000000)
+	payload := map[string]interface{}{
+		"command":    command,
+		"request_id": reqID,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
 	data = append(data, '\n')
 
 	conn, err := net.Dial("unix", p.socketPath)
@@ -212,31 +237,49 @@ func (p *Player) GetPlaylist() ([]map[string]interface{}, error) {
 	}
 
 	// Read response
-	// MPV might send events before the response, so we need to filter for request_id: 1
 	decoder := json.NewDecoder(conn)
 	for {
 		var resp map[string]interface{}
 		if err := decoder.Decode(&resp); err != nil {
+			log.Printf("MPV IPC Decode Error: %v", err)
 			return nil, err
 		}
-		
+
 		if id, ok := resp["request_id"]; ok {
-			if idFloat, ok := id.(float64); ok && int(idFloat) == 1 {
+			if idFloat, ok := id.(float64); ok && int(idFloat) == reqID {
 				if errVal, ok := resp["error"]; ok && errVal != "success" {
+					if errVal != "property unavailable" {
+						log.Printf("MPV IPC Error: %v", errVal)
+					}
 					return nil, fmt.Errorf("mpv error: %v", errVal)
 				}
-				if data, ok := resp["data"].([]interface{}); ok {
-					var playlist []map[string]interface{}
-					for _, item := range data {
-						if itemMap, ok := item.(map[string]interface{}); ok {
-							playlist = append(playlist, itemMap)
-						}
-					}
-					return playlist, nil
-				}
-				return nil, fmt.Errorf("unexpected data format")
+				// log.Printf("MPV Response for %v: %v", command, resp["data"])
+				return resp["data"], nil
 			}
 		}
 	}
 }
 
+// GetProperty fetches a property from mpv
+func (p *Player) GetProperty(prop string) (interface{}, error) {
+	return p.sendRequest([]interface{}{"get_property", prop})
+}
+
+// GetPlaylist fetches the current playlist from mpv
+func (p *Player) GetPlaylist() ([]map[string]interface{}, error) {
+	data, err := p.sendRequest([]interface{}{"get_property", "playlist"})
+	if err != nil {
+		return nil, err
+	}
+
+	if dataList, ok := data.([]interface{}); ok {
+		var playlist []map[string]interface{}
+		for _, item := range dataList {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				playlist = append(playlist, itemMap)
+			}
+		}
+		return playlist, nil
+	}
+	return nil, fmt.Errorf("unexpected data format for playlist")
+}
