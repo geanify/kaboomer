@@ -36,6 +36,8 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/queue", s.handleQueue)
 	mux.HandleFunc("/api/queue/add", s.handleQueueAdd)
+	mux.HandleFunc("/api/queue/add_batch", s.handleQueueAddBatch)
+	mux.HandleFunc("/api/play_batch", s.handlePlayBatch)
 
 	log.Printf("Server listening on %s", port)
 	return http.ListenAndServe(port, mux)
@@ -147,19 +149,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if pos, err := s.player.GetProperty("time-pos"); err == nil {
 		if posFloat, ok := pos.(float64); ok {
 			status["position"] = posFloat
-		} else {
-			log.Printf("Invalid position format: %T %v", pos, pos)
 		}
-	} else {
+	} else if err.Error() != "mpv error: property unavailable" {
 		log.Printf("Failed to get time-pos: %v", err)
 	}
+
 	if dur, err := s.player.GetProperty("duration"); err == nil {
 		if durFloat, ok := dur.(float64); ok {
 			status["duration"] = durFloat
-		} else {
-			log.Printf("Invalid duration format: %T %v", dur, dur)
 		}
-	} else {
+	} else if err.Error() != "mpv error: property unavailable" {
 		log.Printf("Failed to get duration: %v", err)
 	}
 
@@ -215,11 +214,73 @@ func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
 		req.Title = "Unknown Track"
 	}
 
-	err := s.player.Append(req.URL, req.Title)
-	if err != nil {
-		log.Printf("Queue Add error: %v", err)
-		http.Error(w, "Failed to add to queue", http.StatusInternalServerError)
+	// err := s.player.Append(req.URL, req.Title)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleQueueAddBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
+	}
+
+	var reqs []PlayRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
+		http.Error(w, "Invalid body", http.StatusBadRequest)
+		return
+	}
+
+	for _, req := range reqs {
+		if req.URL == "" {
+			continue
+		}
+		if req.Title == "" {
+			req.Title = "Unknown Track"
+		}
+		// We ignore errors for individual items to keep going
+		s.player.Append(req.URL, req.Title)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handlePlayBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqs []PlayRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
+		http.Error(w, "Invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if len(reqs) == 0 {
+		return
+	}
+
+	// Play first item (replace)
+	first := reqs[0]
+	if first.Title == "" {
+		first.Title = "Unknown Track"
+	}
+	if err := s.player.Play(first.URL, first.Title); err != nil {
+		log.Printf("Play Batch error (first): %v", err)
+		http.Error(w, "Failed to play first item", http.StatusInternalServerError)
+		return
+	}
+
+	// Append rest
+	for i := 1; i < len(reqs); i++ {
+		req := reqs[i]
+		if req.URL == "" {
+			continue
+		}
+		if req.Title == "" {
+			req.Title = "Unknown Track"
+		}
+		s.player.Append(req.URL, req.Title)
 	}
 
 	w.WriteHeader(http.StatusOK)

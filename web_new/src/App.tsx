@@ -14,10 +14,6 @@ function App() {
 
   const search = async (query: string) => {
     try {
-      if (query.startsWith('http')) {
-        await play({ url: query, title: 'Direct URL' } as any);
-        return;
-      }
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       setSearchResults(data || []);
@@ -47,6 +43,32 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: track.url, title: track.title }),
+      });
+      updateStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const playBatch = async (tracks: SearchResult[]) => {
+    try {
+      await fetch('/api/play_batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
+      });
+      updateStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addToQueueBatch = async (tracks: SearchResult[]) => {
+    try {
+      await fetch('/api/queue/add_batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
       });
       updateStatus();
     } catch (err) {
@@ -103,7 +125,13 @@ function App() {
         
         <div className="grid md:grid-cols-2 gap-8 mt-8">
             <div>
-                <SearchResults results={searchResults} onPlay={play} onAddToQueue={addToQueue} />
+                <SearchResults 
+                  results={searchResults} 
+                  onPlay={play} 
+                  onAddToQueue={addToQueue}
+                  onPlayAll={() => playBatch(searchResults)}
+                  onAddToQueueAll={() => addToQueueBatch(searchResults)}
+                />
             </div>
             <div>
                 <Queue items={queue} />

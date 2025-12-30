@@ -228,7 +228,9 @@ func (p *Player) sendRequest(command []interface{}) (interface{}, error) {
 		if id, ok := resp["request_id"]; ok {
 			if idFloat, ok := id.(float64); ok && int(idFloat) == reqID {
 				if errVal, ok := resp["error"]; ok && errVal != "success" {
-					log.Printf("MPV IPC Error: %v", errVal)
+					if errVal != "property unavailable" {
+						log.Printf("MPV IPC Error: %v", errVal)
+					}
 					return nil, fmt.Errorf("mpv error: %v", errVal)
 				}
 				// log.Printf("MPV Response for %v: %v", command, resp["data"])

@@ -15,11 +15,11 @@ type Service struct {
 }
 
 type SearchResult struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Uploader string `json:"uploader"`
-	Duration int    `json:"duration"` // Duration in seconds (sometimes float, but int is easier)
-	URL      string `json:"url"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Uploader  string `json:"uploader"`
+	Duration  int    `json:"duration"` // Duration in seconds (sometimes float, but int is easier)
+	URL       string `json:"url"`
 	Thumbnail string `json:"thumbnail"`
 }
 
@@ -45,14 +45,25 @@ func New(cookiesPath, ytDlpPath string) *Service {
 
 // Search performs a search using yt-dlp
 func (s *Service) Search(query string) ([]SearchResult, error) {
-	// ytsearch5:query -> return top 5 results
-	searchQuery := fmt.Sprintf("ytsearch10:%s", query)
-
-	args := []string{
-		searchQuery,
-		"--dump-json",
-		"--flat-playlist", // Don't resolve streams, just metadata
-		"--no-warnings",
+	var args []string
+	if len(query) > 4 && query[:4] == "http" {
+		// Direct URL
+		args = []string{
+			query,
+			"--dump-json",
+			"--flat-playlist",
+			"--no-warnings",
+		}
+	} else {
+		// Search
+		// ytsearch10:query -> return top 10 results
+		searchQuery := fmt.Sprintf("ytsearch10:%s", query)
+		args = []string{
+			searchQuery,
+			"--dump-json",
+			"--flat-playlist",
+			"--no-warnings",
+		}
 	}
 
 	if s.cookiesPath != "" {
@@ -91,7 +102,7 @@ func (s *Service) Search(query string) ([]SearchResult, error) {
 		if url == "" && entry.ID != "" {
 			url = "https://www.youtube.com/watch?v=" + entry.ID
 		}
-		
+
 		// Construct a thumbnail URL if possible
 		thumb := ""
 		if entry.ID != "" {
@@ -99,15 +110,14 @@ func (s *Service) Search(query string) ([]SearchResult, error) {
 		}
 
 		results = append(results, SearchResult{
-			ID:       entry.ID,
-			Title:    entry.Title,
-			Uploader: entry.Uploader,
-			Duration: duration,
-			URL:      url,
+			ID:        entry.ID,
+			Title:     entry.Title,
+			Uploader:  entry.Uploader,
+			Duration:  duration,
+			URL:       url,
 			Thumbnail: thumb,
 		})
 	}
 
 	return results, nil
 }
-
