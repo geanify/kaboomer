@@ -143,12 +143,20 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if pos, err := s.player.GetProperty("time-pos"); err == nil {
 		if posFloat, ok := pos.(float64); ok {
 			status["position"] = posFloat
+		} else {
+			log.Printf("Invalid position format: %T %v", pos, pos)
 		}
+	} else {
+		log.Printf("Failed to get time-pos: %v", err)
 	}
 	if dur, err := s.player.GetProperty("duration"); err == nil {
 		if durFloat, ok := dur.(float64); ok {
 			status["duration"] = durFloat
+		} else {
+			log.Printf("Invalid duration format: %T %v", dur, dur)
 		}
+	} else {
+		log.Printf("Failed to get duration: %v", err)
 	}
 
 	// Try to get real playlist info to see what's playing

@@ -184,8 +184,9 @@ func (p *Player) Prev() error {
 
 // sendRequest sends a command and waits for a response
 func (p *Player) sendRequest(command []interface{}) (interface{}, error) {
-	// Use a random request ID to filter responses (simple implementation)
-	reqID := int(time.Now().UnixNano())
+	// Use a small random request ID to avoid float64 precision issues in JSON
+	// UnixNano is too large for float64 exact representation
+	reqID := int(time.Now().Unix() % 1000000)
 	payload := map[string]interface{}{
 		"command":    command,
 		"request_id": reqID,
@@ -212,14 +213,17 @@ func (p *Player) sendRequest(command []interface{}) (interface{}, error) {
 	for {
 		var resp map[string]interface{}
 		if err := decoder.Decode(&resp); err != nil {
+			log.Printf("MPV IPC Decode Error: %v", err)
 			return nil, err
 		}
 
 		if id, ok := resp["request_id"]; ok {
 			if idFloat, ok := id.(float64); ok && int(idFloat) == reqID {
 				if errVal, ok := resp["error"]; ok && errVal != "success" {
+					log.Printf("MPV IPC Error: %v", errVal)
 					return nil, fmt.Errorf("mpv error: %v", errVal)
 				}
+				// log.Printf("MPV Response for %v: %v", command, resp["data"])
 				return resp["data"], nil
 			}
 		}
