@@ -215,7 +215,13 @@ func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
 		req.Title = "Unknown Track"
 	}
 
-	// err := s.player.Append(req.URL, req.Title)
+	err := s.player.Append(req.URL, req.Title)
+	if err != nil {
+		log.Printf("Queue Add error: %v", err)
+		http.Error(w, "Failed to add to queue", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
