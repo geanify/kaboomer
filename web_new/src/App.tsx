@@ -9,6 +9,8 @@ function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [queue, setQueue] = useState<PlaylistItem[]>([]);
   const [currentTitle, setCurrentTitle] = useState('');
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const search = async (query: string) => {
     try {
@@ -57,6 +59,8 @@ function App() {
       const statusRes = await fetch('/api/status');
       const statusData = await statusRes.json();
       setCurrentTitle(statusData.current_title);
+      setPosition(statusData.position || 0);
+      setDuration(statusData.duration || 0);
 
       const queueRes = await fetch('/api/queue');
       const queueData = await queueRes.json();
@@ -70,7 +74,7 @@ function App() {
 
   useEffect(() => {
     updateStatus();
-    const interval = setInterval(updateStatus, 3000);
+    const interval = setInterval(updateStatus, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -97,6 +101,8 @@ function App() {
       <NowPlaying 
         currentTitle={currentTitle}
         isPlaying={!!currentTitle}
+        position={position}
+        duration={duration}
         onPrev={() => control('prev')}
         onNext={() => control('next')}
         onTogglePlay={() => control('pause')}

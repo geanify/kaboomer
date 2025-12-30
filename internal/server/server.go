@@ -9,8 +9,8 @@ import (
 )
 
 type Server struct {
-	player *player.Player
-	yt     *youtube.Service
+	player    *player.Player
+	yt        *youtube.Service
 	staticDir string
 }
 
@@ -135,8 +135,22 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
 		"current_title": s.player.GetStatus(),
+		"position":      0.0,
+		"duration":      0.0,
 	}
-	
+
+	// Get progress info
+	if pos, err := s.player.GetProperty("time-pos"); err == nil {
+		if posFloat, ok := pos.(float64); ok {
+			status["position"] = posFloat
+		}
+	}
+	if dur, err := s.player.GetProperty("duration"); err == nil {
+		if durFloat, ok := dur.(float64); ok {
+			status["duration"] = durFloat
+		}
+	}
+
 	// Try to get real playlist info to see what's playing
 	playlist, err := s.player.GetPlaylist()
 	if err == nil {
@@ -163,8 +177,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get queue", http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(playlist)
 }
-

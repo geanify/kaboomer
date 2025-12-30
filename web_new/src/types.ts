@@ -14,3 +14,8 @@ export interface PlaylistItem {
   playing?: boolean;
 }
 
+export interface PlayerStatus {
+  current_title: string;
+  position: number;
+  duration: number;
+}
