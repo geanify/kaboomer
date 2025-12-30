@@ -30,15 +30,22 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark-gray border-t border-spotify-light-gray p-3">
-      <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="text-xs text-spotify-subtext">Now Playing</div>
-          <div className="font-medium truncate text-spotify-green text-sm">{currentTitle || 'Not Playing'}</div>
+    <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark-gray border-t border-spotify-light-gray p-3 pb-safe">
+      <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
+        <div className="w-full md:flex-1 min-w-0 flex items-center justify-between md:justify-start">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs text-spotify-subtext">Now Playing</div>
+            <div className="font-medium truncate text-spotify-green text-sm">{currentTitle || 'Not Playing'}</div>
+          </div>
+          <div className="md:hidden flex items-center gap-3">
+             <Button variant="icon" onClick={onTogglePlay} className="p-2 bg-white rounded-full text-black">
+                {isPlaying ? <Pause className="w-5 h-5 fill-black" /> : <Play className="w-5 h-5 fill-black ml-1" />}
+             </Button>
+          </div>
         </div>
         
-        <div className="flex-1 flex flex-col items-center max-w-md">
-          <div className="flex items-center gap-4 mb-1">
+        <div className="w-full md:flex-1 flex flex-col items-center max-w-md">
+          <div className="hidden md:flex items-center gap-4 mb-1">
             <Button variant="icon" onClick={onPrev}>
               <SkipBack className="w-5 h-5" />
             </Button>
@@ -53,10 +60,10 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
           <div className="w-full flex items-center gap-2 text-xs text-spotify-subtext font-mono">
             <span>{formatTime(position)}</span>
             <div 
-              className="flex-1 h-1 bg-gray-600 rounded-full cursor-pointer group relative"
+              className="flex-1 h-2 md:h-1 bg-gray-600 rounded-full cursor-pointer group relative touch-none"
               onClick={handleSeek}
             >
-               <div className="absolute top-1/2 -translate-y-1/2 w-full h-3 opacity-0 cursor-pointer" /> {/* Click target area */}
+               <div className="absolute -top-2 -bottom-2 w-full opacity-0 cursor-pointer" /> {/* Larger touch target */}
                <div 
                  className="h-full bg-white rounded-full transition-all duration-100 ease-linear group-hover:bg-spotify-green"
                  style={{ width: `${duration > 0 ? (position / duration) * 100 : 0}%` }}

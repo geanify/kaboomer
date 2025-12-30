@@ -128,15 +128,15 @@ function App() {
 
   return (
     <div className="min-h-screen bg-spotify-black p-4 md:p-8">
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-spotify-green mb-2">Kaboomer</h1>
-        <p className="text-spotify-subtext">Your private audio sanctuary</p>
+      <header className="mb-4 md:mb-8 text-center">
+        <h1 className="text-3xl md:text-4xl font-bold text-spotify-green mb-1 md:mb-2">Kaboomer</h1>
+        <p className="text-spotify-subtext text-sm md:text-base">Your private audio sanctuary</p>
       </header>
 
-      <main className="max-w-4xl mx-auto">
+      <main className="max-w-4xl mx-auto pb-32">
         <SearchBar onSearch={search} />
         
-        <div className="grid md:grid-cols-2 gap-8 mt-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6 md:mt-8">
             <div>
                 <SearchResults 
                   results={searchResults} 
