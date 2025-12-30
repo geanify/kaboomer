@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PlaylistItem } from '../../types';
+import { Play } from 'lucide-react';
 
 interface QueueProps {
   items: PlaylistItem[];
@@ -18,8 +19,8 @@ export const Queue: React.FC<QueueProps> = ({ items }) => {
             item.current ? 'bg-spotify-light-gray text-spotify-green' : 'hover:bg-spotify-light-gray'
           }`}
         >
-          <div className="w-8 text-center text-sm text-spotify-subtext">
-            {item.current ? '▶' : index + 1}
+          <div className="w-8 text-center text-sm text-spotify-subtext flex justify-center">
+            {item.current ? <Play className="w-4 h-4 fill-current" /> : index + 1}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium truncate">
