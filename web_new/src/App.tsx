@@ -41,12 +41,12 @@ function App() {
     }
   };
 
-  const control = async (action: string) => {
+  const control = async (action: string, value?: number) => {
     try {
       await fetch('/api/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, value }),
       });
       setTimeout(updateStatus, 500);
     } catch (err) {
@@ -106,6 +106,7 @@ function App() {
         onPrev={() => control('prev')}
         onNext={() => control('next')}
         onTogglePlay={() => control('pause')}
+        onSeek={(time) => control('seek', time)}
       />
     </div>
   );

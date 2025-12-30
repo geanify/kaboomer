@@ -10,6 +10,7 @@ interface PlayerControlsProps {
   currentTitle: string;
   position?: number;
   duration?: number;
+  onSeek?: (time: number) => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -19,7 +20,15 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, onNext, onTogglePlay, currentTitle, position = 0, duration = 0 }) => {
+export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, onNext, onTogglePlay, currentTitle, position = 0, duration = 0, onSeek }) => {
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!duration || !onSeek) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = Math.min(Math.max(x / rect.width, 0), 1);
+    onSeek(percentage * duration);
+  };
+
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark-gray border-t border-spotify-light-gray p-3">
       <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
@@ -43,9 +52,13 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
           
           <div className="w-full flex items-center gap-2 text-xs text-spotify-subtext font-mono">
             <span>{formatTime(position)}</span>
-            <div className="flex-1 h-1 bg-gray-600 rounded-full overflow-hidden">
+            <div 
+              className="flex-1 h-1 bg-gray-600 rounded-full cursor-pointer group relative"
+              onClick={handleSeek}
+            >
+               <div className="absolute top-1/2 -translate-y-1/2 w-full h-3 opacity-0 cursor-pointer" /> {/* Click target area */}
                <div 
-                 className="h-full bg-white rounded-full transition-all duration-1000 ease-linear"
+                 className="h-full bg-white rounded-full transition-all duration-100 ease-linear group-hover:bg-spotify-green"
                  style={{ width: `${duration > 0 ? (position / duration) * 100 : 0}%` }}
                />
             </div>

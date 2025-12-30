@@ -96,7 +96,8 @@ func (s *Server) handlePlay(w http.ResponseWriter, r *http.Request) {
 }
 
 type ControlRequest struct {
-	Action string `json:"action"` // pause, resume, next, prev
+	Action string  `json:"action"` // pause, resume, next, prev, seek
+	Value  float64 `json:"value,omitempty"`
 }
 
 func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +120,8 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 		err = s.player.Next()
 	case "prev":
 		err = s.player.Prev()
+	case "seek":
+		err = s.player.Seek(req.Value)
 	default:
 		http.Error(w, "Unknown action", http.StatusBadRequest)
 		return

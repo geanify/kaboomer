@@ -182,6 +182,11 @@ func (p *Player) Prev() error {
 	return p.sendCommand([]interface{}{"playlist-prev"})
 }
 
+// Seek seeks to a position in seconds
+func (p *Player) Seek(seconds float64) error {
+	return p.sendCommand([]interface{}{"seek", seconds, "absolute"})
+}
+
 // sendRequest sends a command and waits for a response
 func (p *Player) sendRequest(command []interface{}) (interface{}, error) {
 	// Use a small random request ID to avoid float64 precision issues in JSON
