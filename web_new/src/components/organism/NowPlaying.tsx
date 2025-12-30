@@ -38,8 +38,14 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
             <div className="font-medium truncate text-spotify-green text-sm">{currentTitle || 'Not Playing'}</div>
           </div>
           <div className="md:hidden flex items-center gap-3">
+             <Button variant="icon" onClick={onPrev} className="text-white">
+                <SkipBack className="w-5 h-5" />
+             </Button>
              <Button variant="icon" onClick={onTogglePlay} className="p-2 bg-white rounded-full text-black">
                 {isPlaying ? <Pause className="w-5 h-5 fill-black" /> : <Play className="w-5 h-5 fill-black ml-1" />}
+             </Button>
+             <Button variant="icon" onClick={onNext} className="text-white">
+                <SkipForward className="w-5 h-5" />
              </Button>
           </div>
         </div>
