@@ -35,6 +35,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/api/control", s.handleControl)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/queue", s.handleQueue)
+	mux.HandleFunc("/api/queue/add", s.handleQueueAdd)
 
 	log.Printf("Server listening on %s", port)
 	return http.ListenAndServe(port, mux)
@@ -191,4 +192,35 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(playlist)
+}
+
+func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req PlayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		http.Error(w, "URL required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" {
+		req.Title = "Unknown Track"
+	}
+
+	err := s.player.Append(req.URL, req.Title)
+	if err != nil {
+		log.Printf("Queue Add error: %v", err)
+		http.Error(w, "Failed to add to queue", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

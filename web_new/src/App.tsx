@@ -41,6 +41,19 @@ function App() {
     }
   };
 
+  const addToQueue = async (track: SearchResult) => {
+    try {
+      await fetch('/api/queue/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: track.url, title: track.title }),
+      });
+      updateStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const control = async (action: string, value?: number) => {
     try {
       await fetch('/api/control', {
@@ -90,7 +103,7 @@ function App() {
         
         <div className="grid md:grid-cols-2 gap-8 mt-8">
             <div>
-                <SearchResults results={searchResults} onPlay={play} />
+                <SearchResults results={searchResults} onPlay={play} onAddToQueue={addToQueue} />
             </div>
             <div>
                 <Queue items={queue} />

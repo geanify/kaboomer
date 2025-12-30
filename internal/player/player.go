@@ -162,7 +162,10 @@ func (p *Player) Play(url string, title string) error {
 }
 
 // Append adds a URL to the internal playlist
-func (p *Player) Append(url string) error {
+func (p *Player) Append(url string, title string) error {
+	if title != "" {
+		return p.sendCommand([]interface{}{"loadfile", url, "append", fmt.Sprintf("force-media-title=%s", title)})
+	}
 	return p.sendCommand([]interface{}{"loadfile", url, "append"})
 }
 
