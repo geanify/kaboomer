@@ -34,6 +34,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/api/play", s.handlePlay)
 	mux.HandleFunc("/api/control", s.handleControl)
 	mux.HandleFunc("/api/status", s.handleStatus)
+	mux.HandleFunc("/api/queue", s.handleQueue)
 
 	log.Printf("Server listening on %s", port)
 	return http.ListenAndServe(port, mux)
@@ -132,10 +133,38 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	status := map[string]string{
+	status := map[string]interface{}{
 		"current_title": s.player.GetStatus(),
 	}
+	
+	// Try to get real playlist info to see what's playing
+	playlist, err := s.player.GetPlaylist()
+	if err == nil {
+		for _, item := range playlist {
+			if current, ok := item["current"].(bool); ok && current {
+				if title, ok := item["title"].(string); ok {
+					status["current_title"] = title
+				} else if filename, ok := item["filename"].(string); ok {
+					status["current_title"] = filename
+				}
+				break
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
+	playlist, err := s.player.GetPlaylist()
+	if err != nil {
+		log.Printf("Queue error: %v", err)
+		http.Error(w, "Failed to get queue", http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(playlist)
 }
 

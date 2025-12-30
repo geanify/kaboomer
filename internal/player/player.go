@@ -184,8 +184,59 @@ func (p *Player) Prev() error {
 
 // GetProperty fetches a property from mpv
 func (p *Player) GetProperty(prop string) (interface{}, error) {
-    // Implementation would require reading the response from the socket
-    // For now, we keep it write-only for simplicity unless needed
-    return nil, nil
+	// Simple request-response using a temporary listener would be complex with the current write-only setup.
+	// For a robust implementation, we need to read from the socket. 
+	// Given we are redesigning, let's implement a proper read loop or request/response mechanism.
+	return nil, fmt.Errorf("not implemented yet")
+}
+
+// GetPlaylist fetches the current playlist from mpv
+func (p *Player) GetPlaylist() ([]map[string]interface{}, error) {
+	// We need to send a command and wait for a response.
+	// This requires a significant change to how we handle the socket (reading responses).
+	// For now, let's just implement the send part and read one line.
+	
+	cmd := []interface{}{"get_property", "playlist"}
+	payload := map[string]interface{}{ "command": cmd, "request_id": 1 }
+	data, _ := json.Marshal(payload)
+	data = append(data, '\n')
+
+	conn, err := net.Dial("unix", p.socketPath)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write(data); err != nil {
+		return nil, err
+	}
+
+	// Read response
+	// MPV might send events before the response, so we need to filter for request_id: 1
+	decoder := json.NewDecoder(conn)
+	for {
+		var resp map[string]interface{}
+		if err := decoder.Decode(&resp); err != nil {
+			return nil, err
+		}
+		
+		if id, ok := resp["request_id"]; ok {
+			if idFloat, ok := id.(float64); ok && int(idFloat) == 1 {
+				if errVal, ok := resp["error"]; ok && errVal != "success" {
+					return nil, fmt.Errorf("mpv error: %v", errVal)
+				}
+				if data, ok := resp["data"].([]interface{}); ok {
+					var playlist []map[string]interface{}
+					for _, item := range data {
+						if itemMap, ok := item.(map[string]interface{}); ok {
+							playlist = append(playlist, itemMap)
+						}
+					}
+					return playlist, nil
+				}
+				return nil, fmt.Errorf("unexpected data format")
+			}
+		}
+	}
 }
 
