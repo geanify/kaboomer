@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '../atoms/Button';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 
 interface PlayerControlsProps {
   isPlaying: boolean;
@@ -10,7 +10,9 @@ interface PlayerControlsProps {
   currentTitle: string;
   position?: number;
   duration?: number;
+  volume?: number;
   onSeek?: (time: number) => void;
+  onVolumeChange?: (volume: number) => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -20,7 +22,21 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, onNext, onTogglePlay, currentTitle, position = 0, duration = 0, onSeek }) => {
+export const NowPlaying: React.FC<PlayerControlsProps> = ({ 
+  isPlaying, 
+  onPrev, 
+  onNext, 
+  onTogglePlay, 
+  currentTitle, 
+  position = 0, 
+  duration = 0, 
+  volume = 100,
+  onSeek,
+  onVolumeChange
+}) => {
+  const [isDraggingVolume, setIsDraggingVolume] = useState(false);
+  const volumeRef = useRef<HTMLDivElement>(null);
+
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration || !onSeek) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -28,6 +44,40 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
     const percentage = Math.min(Math.max(x / rect.width, 0), 1);
     onSeek(percentage * duration);
   };
+
+  const handleVolumeInteract = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onVolumeChange || !volumeRef.current) return;
+    const rect = volumeRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = Math.min(Math.max(x / rect.width, 0), 1);
+    onVolumeChange(percentage * 100);
+  };
+
+  const handleVolumeMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDraggingVolume(true);
+    handleVolumeInteract(e);
+  };
+
+  const handleVolumeMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDraggingVolume) {
+      handleVolumeInteract(e);
+    }
+  };
+
+  const handleVolumeMouseUp = () => {
+    setIsDraggingVolume(false);
+  };
+
+  React.useEffect(() => {
+    if (isDraggingVolume) {
+      window.addEventListener('mouseup', handleVolumeMouseUp);
+      window.addEventListener('mousemove', handleVolumeMouseUp); // Using this to catch drag end outside
+    }
+    return () => {
+      window.removeEventListener('mouseup', handleVolumeMouseUp);
+      window.removeEventListener('mousemove', handleVolumeMouseUp);
+    };
+  }, [isDraggingVolume]);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark-gray border-t border-spotify-light-gray p-3 pb-safe">
@@ -79,8 +129,22 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({ isPlaying, onPrev, o
           </div>
         </div>
         
-        <div className="flex-1 hidden md:block">
-           {/* Volume or other controls could go here */}
+        <div className="flex-1 hidden md:flex items-center justify-end gap-2">
+           <Button variant="icon" onClick={() => onVolumeChange?.(volume === 0 ? 100 : 0)}>
+             {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+           </Button>
+           <div 
+              ref={volumeRef}
+              className="w-24 h-1 bg-gray-600 rounded-full cursor-pointer group relative"
+              onMouseDown={handleVolumeMouseDown}
+              onMouseMove={handleVolumeMouseMove}
+              onClick={handleVolumeInteract}
+           >
+              <div 
+                className="h-full bg-white rounded-full transition-all duration-75 ease-linear group-hover:bg-spotify-green"
+                style={{ width: `${volume}%` }}
+              />
+           </div>
         </div>
       </div>
     </div>

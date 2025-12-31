@@ -18,4 +18,5 @@ export interface PlayerStatus {
   current_title: string;
   position: number;
   duration: number;
+  volume: number;
 }

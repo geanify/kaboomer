@@ -120,6 +120,8 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 		err = s.manager.Prev()
 	case "seek":
 		err = s.manager.Seek(req.Value)
+	case "volume":
+		err = s.manager.SetVolume(req.Value)
 	default:
 		http.Error(w, "Unknown action", http.StatusBadRequest)
 		return
@@ -138,6 +140,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"current_title": s.manager.GetStatus(),
 		"position":      0.0,
 		"duration":      0.0,
+		"volume":        100.0,
 	}
 
 	if pos, err := s.manager.GetProperty("time-pos"); err == nil {
@@ -148,6 +151,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if dur, err := s.manager.GetProperty("duration"); err == nil {
 		if durFloat, ok := dur.(float64); ok {
 			status["duration"] = durFloat
+		}
+	}
+	if vol, err := s.manager.GetProperty("volume"); err == nil {
+		if volFloat, ok := vol.(float64); ok {
+			status["volume"] = volFloat
 		}
 	}
 

@@ -83,6 +83,10 @@ func (m *Manager) processItem(item *QueueItem) {
 		log.Printf("Error downloading %s: %v", item.Title, err)
 		item.Status = StatusError
 		item.Error = err.Error()
+
+		if m.playTarget == item {
+			m.playNextAvailable(item)
+		}
 		return
 	}
 
@@ -95,8 +99,10 @@ func (m *Manager) processItem(item *QueueItem) {
 		log.Printf("PlayTarget ready: %s", item.Title)
 		if err := m.player.Play(item.LocalPath, item.Title); err != nil {
 			log.Printf("Failed to play %s: %v", item.Title, err)
+			m.playNextAvailable(item)
+		} else {
+			m.playTarget = nil
 		}
-		m.playTarget = nil
 	} else {
 		// Just append to playlist
 		log.Printf("Appending to playlist: %s", item.Title)
@@ -178,6 +184,7 @@ func (m *Manager) Next() error                                  { return m.playe
 func (m *Manager) Prev() error                                  { return m.player.Prev() }
 func (m *Manager) Pause() error                                 { return m.player.Pause() }
 func (m *Manager) Seek(val float64) error                       { return m.player.Seek(val) }
+func (m *Manager) SetVolume(val float64) error                  { return m.player.SetVolume(val) }
 func (m *Manager) GetStatus() string                            { return m.player.GetStatus() }
 func (m *Manager) GetProperty(prop string) (interface{}, error) { return m.player.GetProperty(prop) }
 
@@ -213,7 +220,14 @@ func (m *Manager) PlayIndex(index int) error {
 		// Simplest: Just call player.Play(item.LocalPath) which appends and plays.
 		// But that duplicates the entry in mpv.
 
-		return m.player.Play(item.LocalPath, item.Title)
+		if err := m.player.Play(item.LocalPath, item.Title); err != nil {
+			log.Printf("Failed to play %s: %v", item.Title, err)
+			m.mu.Lock()
+			m.playNextAvailable(item)
+			m.mu.Unlock()
+			return nil
+		}
+		return nil
 	} else if item.Status == StatusPending || item.Status == StatusDownloading {
 		// Prioritize it
 		m.mu.Lock()
@@ -222,4 +236,49 @@ func (m *Manager) PlayIndex(index int) error {
 		return nil // It will play when ready
 	}
 	return fmt.Errorf("cannot play item with status %s", item.Status)
+}
+
+// playNextAvailable attempts to play the next available item in the queue.
+// It should be called when the current playTarget fails.
+// m.mu must be locked.
+func (m *Manager) playNextAvailable(failedItem *QueueItem) {
+	// Find index of failed item
+	idx := -1
+	for i, item := range m.queue {
+		if item == failedItem {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		m.playTarget = nil
+		return
+	}
+
+	// Try next items
+	for i := idx + 1; i < len(m.queue); i++ {
+		next := m.queue[i]
+		if next.Status != StatusError {
+			log.Printf("Skipping failed item '%s', targeting '%s'", failedItem.Title, next.Title)
+			m.playTarget = next
+
+			// If ready, play immediately
+			if next.Status == StatusReady || next.Status == StatusPlayed {
+				if err := m.player.Play(next.LocalPath, next.Title); err != nil {
+					log.Printf("Failed to play skipped item %s: %v", next.Title, err)
+					continue
+				}
+				// Success
+				m.playTarget = nil
+				return
+			}
+
+			// If not ready, we have set playTarget. It will play when processed.
+			return
+		}
+	}
+
+	log.Printf("No further items to play in queue")
+	m.playTarget = nil
 }

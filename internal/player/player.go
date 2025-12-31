@@ -155,10 +155,12 @@ func (p *Player) sendCommand(command []interface{}) error {
 // Play loads and plays a URL by appending it and then playing it (to avoid clearing playlist)
 func (p *Player) Play(url string, title string) error {
 	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
 	p.currentTitle = title
-	p.mutex.Unlock()
+
 	// First append
-	if err := p.Append(url, title); err != nil {
+	if err := p.append(url, title); err != nil {
 		return err
 	}
 	
@@ -183,10 +185,20 @@ func (p *Player) PlayIndex(index int) error {
 
 // Append adds a URL to the internal playlist
 func (p *Player) Append(url string, title string) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.append(url, title)
+}
+
+// append is the internal implementation without locking
+func (p *Player) append(url string, title string) error {
+	var err error
 	if title != "" {
-		return p.sendCommand([]interface{}{"loadfile", url, "append", fmt.Sprintf("force-media-title=%s", title)})
+		_, err = p.sendRequest([]interface{}{"loadfile", url, "append", fmt.Sprintf("force-media-title=%s", title)})
+	} else {
+		_, err = p.sendRequest([]interface{}{"loadfile", url, "append"})
 	}
-	return p.sendCommand([]interface{}{"loadfile", url, "append"})
+	return err
 }
 
 // Pause toggles pause
@@ -208,6 +220,23 @@ func (p *Player) Prev() error {
 // Seek seeks to a position in seconds
 func (p *Player) Seek(seconds float64) error {
 	return p.sendCommand([]interface{}{"seek", seconds, "absolute"})
+}
+
+// SetVolume sets the volume (0-100)
+func (p *Player) SetVolume(volume float64) error {
+	return p.sendCommand([]interface{}{"set_property", "volume", volume})
+}
+
+// GetVolume gets the current volume
+func (p *Player) GetVolume() (float64, error) {
+	val, err := p.GetProperty("volume")
+	if err != nil {
+		return 0, err
+	}
+	if v, ok := val.(float64); ok {
+		return v, nil
+	}
+	return 0, fmt.Errorf("unexpected volume type")
 }
 
 // sendRequest sends a command and waits for a response
