@@ -40,8 +40,19 @@ func New(ytDlpPath string) *Player {
 	}
 }
 
-// GetStatus returns the locally tracked status
+// GetStatus returns the locally tracked status.
+// It also attempts to fetch the current media title from mpv if possible.
 func (p *Player) GetStatus() string {
+	// Try to get actual media title from MPV
+	if title, err := p.GetProperty("media-title"); err == nil {
+		if titleStr, ok := title.(string); ok && titleStr != "" {
+			p.mutex.Lock()
+			p.currentTitle = titleStr
+			p.mutex.Unlock()
+			return titleStr
+		}
+	}
+	
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.currentTitle

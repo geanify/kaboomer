@@ -179,6 +179,13 @@ func (m *Manager) GetQueue() []*QueueItem {
 	return cp
 }
 
+// GetPlayTarget returns the current item targeted for playback (e.g. buffering/downloading)
+func (m *Manager) GetPlayTarget() *QueueItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.playTarget
+}
+
 // Control Passthroughs
 func (m *Manager) Next() error                                  { return m.player.Next() }
 func (m *Manager) Prev() error                                  { return m.player.Prev() }

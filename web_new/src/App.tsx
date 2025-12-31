@@ -12,6 +12,7 @@ function App() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(100);
+  const [isLoading, setIsLoading] = useState(false);
 
   const search = async (query: string) => {
     try {
@@ -110,6 +111,7 @@ function App() {
       setCurrentTitle(statusData.current_title);
       setPosition(statusData.position || 0);
       setDuration(statusData.duration || 0);
+      setIsLoading(statusData.is_loading || false);
       if (typeof statusData.volume === 'number') {
         setVolume(statusData.volume);
       }
@@ -162,6 +164,7 @@ function App() {
         position={position}
         duration={duration}
         volume={volume}
+        isLoading={isLoading}
         onPrev={() => control('prev')}
         onNext={() => control('next')}
         onTogglePlay={() => control('pause')}

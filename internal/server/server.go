@@ -141,6 +141,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"position":      0.0,
 		"duration":      0.0,
 		"volume":        100.0,
+		"is_loading":    false,
+	}
+
+	if target := s.manager.GetPlayTarget(); target != nil {
+		status["is_loading"] = true
+		// Override title if idle/empty or if we just assume user wants to see what's coming
+		// Let's just override it if it's not playing something valid or to indicate loading target.
+		// Actually, if we are loading, we might want to show "Loading: X"
+		// But let's just send the title and let frontend handle "Loading..." text via is_loading
+		status["current_title"] = target.Title
 	}
 
 	if pos, err := s.manager.GetProperty("time-pos"); err == nil {

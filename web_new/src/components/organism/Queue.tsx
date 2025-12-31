@@ -1,6 +1,6 @@
 import React from 'react';
 import type { PlaylistItem } from '../../types';
-import { Play } from 'lucide-react';
+import { Play, Loader2, AlertCircle } from 'lucide-react';
 
 interface QueueProps {
   items: PlaylistItem[];
@@ -22,19 +22,31 @@ export const Queue: React.FC<QueueProps> = ({ items, onPlay }) => {
           }`}
         >
           <div className="w-6 md:w-8 text-center text-sm text-spotify-subtext flex justify-center group-hover:text-white">
-            {item.current ? <Play className="w-4 h-4 fill-current" /> : (
+            {item.status === 'downloading' ? (
+                <Loader2 className="w-4 h-4 animate-spin text-spotify-green" />
+            ) : item.status === 'error' ? (
+                <div title="Error downloading">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                </div>
+            ) : item.current ? (
+                <Play className="w-4 h-4 fill-current" />
+            ) : (
                 <span className="md:group-hover:hidden">{index + 1}</span>
             )}
-            {!item.current && <Play className="w-4 h-4 fill-white hidden md:group-hover:block" />}
+            {!item.current && item.status !== 'downloading' && item.status !== 'error' && (
+                <Play className="w-4 h-4 fill-white hidden md:group-hover:block" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium truncate text-sm md:text-base">
               {item.title || item.filename}
             </h3>
+            {item.status === 'error' && (
+                <p className="text-xs text-red-500 mt-1">Download failed</p>
+            )}
           </div>
         </div>
       ))}
     </div>
   );
 };
-
