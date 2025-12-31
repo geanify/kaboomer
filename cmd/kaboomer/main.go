@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"kaboomer/internal/downloader"
+	"kaboomer/internal/manager"
 	"kaboomer/internal/player"
 	"kaboomer/internal/server"
 	"kaboomer/internal/youtube"
@@ -23,6 +25,7 @@ func main() {
 		log.Fatal(err)
 	}
 	staticDir := filepath.Join(cwd, "web", "static")
+	cacheDir := filepath.Join(cwd, "cache")
 
 	// Resolve yt-dlp path
 	ytDlpPath := "yt-dlp"
@@ -43,9 +46,18 @@ func main() {
 
 	// Initialize YouTube Service
 	yt := youtube.New(*cookies, ytDlpPath)
+	
+	// Initialize Downloader
+	dl, err := downloader.New(ytDlpPath, cacheDir)
+	if err != nil {
+		log.Fatalf("Failed to initialize downloader: %v", err)
+	}
+	
+	// Initialize Manager
+	mgr := manager.New(p, dl, yt)
 
 	// Initialize Server
-	srv := server.New(p, yt, staticDir)
+	srv := server.New(mgr, yt, staticDir)
 
 	// Channel to listen for interrupt signals
 	stop := make(chan os.Signal, 1)

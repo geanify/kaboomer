@@ -11,6 +11,7 @@ function App() {
   const [currentTitle, setCurrentTitle] = useState('');
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(100);
 
   const search = async (query: string) => {
     try {
@@ -27,7 +28,7 @@ function App() {
       await fetch('/api/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
       });
       // Clear results after playing (optional)
       // setSearchResults([]);
@@ -42,7 +43,7 @@ function App() {
       await fetch('/api/queue/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
       });
       updateStatus();
     } catch (err) {
@@ -55,7 +56,7 @@ function App() {
       await fetch('/api/play_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
       });
       updateStatus();
     } catch (err) {
@@ -68,7 +69,7 @@ function App() {
       await fetch('/api/queue/add_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
       });
       updateStatus();
     } catch (err) {
@@ -109,6 +110,9 @@ function App() {
       setCurrentTitle(statusData.current_title);
       setPosition(statusData.position || 0);
       setDuration(statusData.duration || 0);
+      if (typeof statusData.volume === 'number') {
+        setVolume(statusData.volume);
+      }
 
       const queueRes = await fetch('/api/queue');
       const queueData = await queueRes.json();
@@ -157,10 +161,12 @@ function App() {
         isPlaying={!!currentTitle}
         position={position}
         duration={duration}
+        volume={volume}
         onPrev={() => control('prev')}
         onNext={() => control('next')}
         onTogglePlay={() => control('pause')}
         onSeek={(time) => control('seek', time)}
+        onVolumeChange={(vol) => control('volume', vol)}
       />
     </div>
   );

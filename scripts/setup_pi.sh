@@ -41,3 +41,5 @@ echo "1. On your PC: GOOS=linux GOARCH=arm GOARM=6 go build -o kaboomer cmd/kabo
 echo "2. Copy 'kaboomer' binary and 'web/' folder to this Pi."
 echo "3. Run: ./kaboomer"
 
+
+

@@ -2,21 +2,21 @@ package server
 
 import (
 	"encoding/json"
-	"kaboomer/internal/player"
+	"kaboomer/internal/manager"
 	"kaboomer/internal/youtube"
 	"log"
 	"net/http"
 )
 
 type Server struct {
-	player    *player.Player
+	manager   *manager.Manager
 	yt        *youtube.Service
 	staticDir string
 }
 
-func New(p *player.Player, yt *youtube.Service, staticDir string) *Server {
+func New(m *manager.Manager, yt *youtube.Service, staticDir string) *Server {
 	return &Server{
-		player:    p,
+		manager:   m,
 		yt:        yt,
 		staticDir: staticDir,
 	}
@@ -63,6 +63,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 type PlayRequest struct {
+	ID    string `json:"id"`
 	URL   string `json:"url"`
 	Title string `json:"title"`
 }
@@ -79,7 +80,6 @@ func (s *Server) handlePlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If no URL but we have a Title (maybe direct search result?), assumes URL is passed
 	if req.URL == "" {
 		http.Error(w, "URL required", http.StatusBadRequest)
 		return
@@ -89,13 +89,7 @@ func (s *Server) handlePlay(w http.ResponseWriter, r *http.Request) {
 		req.Title = "Unknown Track"
 	}
 
-	err := s.player.Play(req.URL, req.Title)
-	if err != nil {
-		log.Printf("Play error: %v", err)
-		http.Error(w, "Failed to play", http.StatusInternalServerError)
-		return
-	}
-
+	s.manager.Play(req.URL, req.Title, req.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -119,13 +113,15 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch req.Action {
 	case "pause", "resume": // toggle
-		err = s.player.Pause()
+		err = s.manager.Pause()
 	case "next":
-		err = s.player.Next()
+		err = s.manager.Next()
 	case "prev":
-		err = s.player.Prev()
+		err = s.manager.Prev()
 	case "seek":
-		err = s.player.Seek(req.Value)
+		err = s.manager.Seek(req.Value)
+	case "volume":
+		err = s.manager.SetVolume(req.Value)
 	default:
 		http.Error(w, "Unknown action", http.StatusBadRequest)
 		return
@@ -141,40 +137,25 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
-		"current_title": s.player.GetStatus(),
+		"current_title": s.manager.GetStatus(),
 		"position":      0.0,
 		"duration":      0.0,
+		"volume":        100.0,
 	}
 
-	// Get progress info
-	if pos, err := s.player.GetProperty("time-pos"); err == nil {
+	if pos, err := s.manager.GetProperty("time-pos"); err == nil {
 		if posFloat, ok := pos.(float64); ok {
 			status["position"] = posFloat
 		}
-	} else if err.Error() != "mpv error: property unavailable" {
-		log.Printf("Failed to get time-pos: %v", err)
 	}
-
-	if dur, err := s.player.GetProperty("duration"); err == nil {
+	if dur, err := s.manager.GetProperty("duration"); err == nil {
 		if durFloat, ok := dur.(float64); ok {
 			status["duration"] = durFloat
 		}
-	} else if err.Error() != "mpv error: property unavailable" {
-		log.Printf("Failed to get duration: %v", err)
 	}
-
-	// Try to get real playlist info to see what's playing
-	playlist, err := s.player.GetPlaylist()
-	if err == nil {
-		for _, item := range playlist {
-			if current, ok := item["current"].(bool); ok && current {
-				if title, ok := item["title"].(string); ok {
-					status["current_title"] = title
-				} else if filename, ok := item["filename"].(string); ok {
-					status["current_title"] = filename
-				}
-				break
-			}
+	if vol, err := s.manager.GetProperty("volume"); err == nil {
+		if volFloat, ok := vol.(float64); ok {
+			status["volume"] = volFloat
 		}
 	}
 
@@ -183,15 +164,35 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
-	playlist, err := s.player.GetPlaylist()
-	if err != nil {
-		log.Printf("Queue error: %v", err)
-		http.Error(w, "Failed to get queue", http.StatusInternalServerError)
-		return
+	queue := s.manager.GetQueue()
+	
+	// Map to structure frontend expects (PlaylistItem-ish)
+	// Frontend expects: filename, title, current?
+	// We'll use our queue structure but we need to identify 'current'.
+	// We can check title against status.current_title
+	currentTitle := s.manager.GetStatus()
+
+	type queueResponseItem struct {
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Status   string `json:"status"`
+		Current  bool   `json:"current"`
+		Filename string `json:"filename"` // Frontend uses this key sometimes
+	}
+	
+	resp := make([]queueResponseItem, len(queue))
+	for i, item := range queue {
+		resp[i] = queueResponseItem{
+			ID:       item.ID,
+			Title:    item.Title,
+			Status:   string(item.Status),
+			Current:  item.Title == currentTitle, // Rough heuristic
+			Filename: item.Title, // Fallback
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(playlist)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
@@ -211,17 +212,7 @@ func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Title == "" {
-		req.Title = "Unknown Track"
-	}
-
-	err := s.player.Append(req.URL, req.Title)
-	if err != nil {
-		log.Printf("Queue Add error: %v", err)
-		http.Error(w, "Failed to add to queue", http.StatusInternalServerError)
-		return
-	}
-
+	s.manager.Add(req.URL, req.Title, req.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -241,7 +232,7 @@ func (s *Server) handleQueuePlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.player.PlayIndex(req.Index); err != nil {
+	if err := s.manager.PlayIndex(req.Index); err != nil {
 		log.Printf("Queue Play error: %v", err)
 		http.Error(w, "Failed to play queue item", http.StatusInternalServerError)
 		return
@@ -266,11 +257,7 @@ func (s *Server) handleQueueAddBatch(w http.ResponseWriter, r *http.Request) {
 		if req.URL == "" {
 			continue
 		}
-		if req.Title == "" {
-			req.Title = "Unknown Track"
-		}
-		// We ignore errors for individual items to keep going
-		s.player.Append(req.URL, req.Title)
+		s.manager.Add(req.URL, req.Title, req.ID)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -292,27 +279,12 @@ func (s *Server) handlePlayBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Play first item (replace)
-	first := reqs[0]
-	if first.Title == "" {
-		first.Title = "Unknown Track"
-	}
-	if err := s.player.Play(first.URL, first.Title); err != nil {
-		log.Printf("Play Batch error (first): %v", err)
-		http.Error(w, "Failed to play first item", http.StatusInternalServerError)
-		return
-	}
-
-	// Append rest
+	// Play first
+	s.manager.Play(reqs[0].URL, reqs[0].Title, reqs[0].ID)
+	
+	// Add rest
 	for i := 1; i < len(reqs); i++ {
-		req := reqs[i]
-		if req.URL == "" {
-			continue
-		}
-		if req.Title == "" {
-			req.Title = "Unknown Track"
-		}
-		s.player.Append(req.URL, req.Title)
+		s.manager.Add(reqs[i].URL, reqs[i].Title, reqs[i].ID)
 	}
 
 	w.WriteHeader(http.StatusOK)
