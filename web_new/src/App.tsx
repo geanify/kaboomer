@@ -9,9 +9,11 @@ function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [queue, setQueue] = useState<PlaylistItem[]>([]);
   const [currentTitle, setCurrentTitle] = useState('');
+  const [currentArtist, setCurrentArtist] = useState('');
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(100);
+  const [isLoading, setIsLoading] = useState(false);
 
   const search = async (query: string) => {
     try {
@@ -28,7 +30,7 @@ function App() {
       await fetch('/api/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id, artist: track.uploader }),
       });
       // Clear results after playing (optional)
       // setSearchResults([]);
@@ -43,7 +45,7 @@ function App() {
       await fetch('/api/queue/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id, artist: track.uploader }),
       });
       updateStatus();
     } catch (err) {
@@ -56,7 +58,7 @@ function App() {
       await fetch('/api/play_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id, artist: t.uploader }))),
       });
       updateStatus();
     } catch (err) {
@@ -69,7 +71,7 @@ function App() {
       await fetch('/api/queue/add_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id, artist: t.uploader }))),
       });
       updateStatus();
     } catch (err) {
@@ -103,13 +105,26 @@ function App() {
     }
   };
 
+  const clearQueue = async () => {
+    try {
+      await fetch('/api/queue/clear', {
+        method: 'POST',
+      });
+      updateStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const updateStatus = async () => {
     try {
       const statusRes = await fetch('/api/status');
       const statusData = await statusRes.json();
       setCurrentTitle(statusData.current_title);
+      setCurrentArtist(statusData.current_artist || '');
       setPosition(statusData.position || 0);
       setDuration(statusData.duration || 0);
+      setIsLoading(statusData.is_loading || false);
       if (typeof statusData.volume === 'number') {
         setVolume(statusData.volume);
       }
@@ -151,17 +166,19 @@ function App() {
                 />
             </div>
             <div>
-                <Queue items={queue} onPlay={playQueueItem} />
+                <Queue items={queue} onPlay={playQueueItem} onClear={clearQueue} />
             </div>
         </div>
       </main>
 
       <NowPlaying 
         currentTitle={currentTitle}
+        currentArtist={currentArtist}
         isPlaying={!!currentTitle}
         position={position}
         duration={duration}
         volume={volume}
+        isLoading={isLoading}
         onPrev={() => control('prev')}
         onNext={() => control('next')}
         onTogglePlay={() => control('pause')}

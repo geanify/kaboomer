@@ -12,6 +12,7 @@ export interface PlaylistItem {
   title?: string;
   current?: boolean;
   playing?: boolean;
+  status?: string;
 }
 
 export interface PlayerStatus {
@@ -19,4 +20,5 @@ export interface PlayerStatus {
   position: number;
   duration: number;
   volume: number;
+  is_loading?: boolean;
 }

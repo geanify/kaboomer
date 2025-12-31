@@ -26,6 +26,7 @@ type QueueItem struct {
 	ID        string      `json:"id"`
 	URL       string      `json:"url"`
 	Title     string      `json:"title"`
+	Artist    string      `json:"artist,omitempty"`
 	Status    TrackStatus `json:"status"`
 	LocalPath string      `json:"-"`
 	Error     string      `json:"error,omitempty"`
@@ -112,6 +113,47 @@ func (m *Manager) processItem(item *QueueItem) {
 	}
 }
 
+// ClearQueue clears the queue
+func (m *Manager) ClearQueue() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Optionally we could stop playback or keep playing current song.
+	// Usually "clear queue" means remove upcoming songs.
+	// But what about the current one?
+	// If we just clear the list, the current song will continue playing until end,
+	// then Next() will find nothing. This is reasonable.
+
+	// However, we should keep the current playing item if possible so the UI doesn't break
+	// and so Next/Prev logic (which relies on finding current path in queue) doesn't break.
+
+	// Find current playing item
+	pathProp, err := m.player.GetProperty("path")
+	var currentItem *QueueItem
+	if err == nil {
+		if currentPath, ok := pathProp.(string); ok && currentPath != "" {
+			for _, item := range m.queue {
+				if item.LocalPath == currentPath {
+					currentItem = item
+					break
+				}
+			}
+		}
+	}
+
+	if currentItem != nil {
+		// Keep only the current item
+		m.queue = []*QueueItem{currentItem}
+	} else {
+		// Clear all
+		m.queue = make([]*QueueItem, 0)
+	}
+
+	// Also clear playTarget if it's not the current item
+	if m.playTarget != currentItem {
+		m.playTarget = nil
+	}
+}
+
 // ensureID ensures the item has an ID. If not, generates one or extracts it.
 func (m *Manager) ensureID(url, id string) string {
 	if id != "" {
@@ -127,13 +169,14 @@ func (m *Manager) ensureID(url, id string) string {
 	return hex.EncodeToString(hash[:])[:12]
 }
 
-func (m *Manager) Add(url, title, id string) {
+func (m *Manager) Add(url, title, id, artist string) {
 	m.mu.Lock()
 	id = m.ensureID(url, id)
 	item := &QueueItem{
 		ID:     id,
 		URL:    url,
 		Title:  title,
+		Artist: artist,
 		Status: StatusPending,
 	}
 	m.queue = append(m.queue, item)
@@ -143,13 +186,14 @@ func (m *Manager) Add(url, title, id string) {
 	m.downloadChan <- item
 }
 
-func (m *Manager) Play(url, title, id string) {
+func (m *Manager) Play(url, title, id, artist string) {
 	m.mu.Lock()
 	id = m.ensureID(url, id)
 	item := &QueueItem{
 		ID:     id,
 		URL:    url,
 		Title:  title,
+		Artist: artist,
 		Status: StatusPending,
 	}
 	// Add to end (or replace? user might want history, let's just append)
@@ -179,14 +223,108 @@ func (m *Manager) GetQueue() []*QueueItem {
 	return cp
 }
 
+// GetPlayTarget returns the current item targeted for playback (e.g. buffering/downloading)
+func (m *Manager) GetPlayTarget() *QueueItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.playTarget
+}
+
 // Control Passthroughs
-func (m *Manager) Next() error                                  { return m.player.Next() }
-func (m *Manager) Prev() error                                  { return m.player.Prev() }
+// func (m *Manager) Next() error                                  { return m.player.Next() }
+// func (m *Manager) Prev() error                                  { return m.player.Prev() }
 func (m *Manager) Pause() error                                 { return m.player.Pause() }
 func (m *Manager) Seek(val float64) error                       { return m.player.Seek(val) }
 func (m *Manager) SetVolume(val float64) error                  { return m.player.SetVolume(val) }
 func (m *Manager) GetStatus() string                            { return m.player.GetStatus() }
 func (m *Manager) GetProperty(prop string) (interface{}, error) { return m.player.GetProperty(prop) }
+
+// Next plays the next item in the queue relative to the current one
+func (m *Manager) Next() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Get current playing file path
+	pathProp, err := m.player.GetProperty("path")
+	if err != nil {
+		// Fallback to blind next
+		return m.player.Next()
+	}
+	currentPath, ok := pathProp.(string)
+	if !ok || currentPath == "" {
+		return m.player.Next()
+	}
+
+	// Find in queue
+	idx := -1
+	for i, item := range m.queue {
+		if item.LocalPath == currentPath {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		// Not found, maybe played external file?
+		return m.player.Next()
+	}
+
+	// Find next valid item
+	nextIdx := idx + 1
+	if nextIdx >= len(m.queue) {
+		return nil // End of queue
+	}
+
+	// We have a target index. Use internal logic to play it.
+	// We need to release lock to call PlayIndex if we want to reuse it,
+	// but PlayIndex takes lock. So we must be careful.
+	// Actually PlayIndex logic is simple enough to inline or use helper.
+	// Let's unlock and call PlayIndex.
+	m.mu.Unlock()
+	err = m.PlayIndex(nextIdx)
+	m.mu.Lock()
+	return err
+}
+
+// Prev plays the previous item in the queue
+func (m *Manager) Prev() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Get current playing file path
+	pathProp, err := m.player.GetProperty("path")
+	if err != nil {
+		return m.player.Prev()
+	}
+	currentPath, ok := pathProp.(string)
+	if !ok || currentPath == "" {
+		return m.player.Prev()
+	}
+
+	// Find in queue
+	idx := -1
+	for i, item := range m.queue {
+		if item.LocalPath == currentPath {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		return m.player.Prev()
+	}
+
+	// Find prev valid item
+	prevIdx := idx - 1
+	if prevIdx < 0 {
+		return nil // Start of queue
+	}
+
+	m.mu.Unlock()
+	err = m.PlayIndex(prevIdx)
+	m.mu.Lock()
+	return err
+}
 
 // PlayIndex plays an item from the queue
 // This is tricky because mpv index might differ from our queue index

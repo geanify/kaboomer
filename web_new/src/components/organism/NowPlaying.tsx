@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../atoms/Button';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2 } from 'lucide-react';
 
 interface PlayerControlsProps {
   isPlaying: boolean;
@@ -8,9 +8,11 @@ interface PlayerControlsProps {
   onNext: () => void;
   onTogglePlay: () => void;
   currentTitle: string;
+  currentArtist?: string;
   position?: number;
   duration?: number;
   volume?: number;
+  isLoading?: boolean;
   onSeek?: (time: number) => void;
   onVolumeChange?: (volume: number) => void;
 }
@@ -27,10 +29,12 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({
   onPrev, 
   onNext, 
   onTogglePlay, 
-  currentTitle, 
+  currentTitle,
+  currentArtist, 
   position = 0, 
   duration = 0, 
   volume = 100,
+  isLoading = false,
   onSeek,
   onVolumeChange
 }) => {
@@ -122,7 +126,15 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({
         <div className="w-full md:flex-1 min-w-0 flex items-center justify-between md:justify-start">
           <div className="min-w-0 flex-1">
             <div className="text-xs text-spotify-subtext">Now Playing</div>
-            <div className="font-medium truncate text-spotify-green text-sm">{currentTitle || 'Not Playing'}</div>
+            <div className="font-medium truncate text-spotify-green text-sm flex items-center gap-2">
+              {isLoading && <Loader2 className="w-3 h-3 animate-spin text-spotify-green" />}
+              {currentTitle || 'Not Playing'}
+            </div>
+            {currentArtist && (
+              <div className="text-xs text-spotify-subtext truncate">
+                {currentArtist}
+              </div>
+            )}
           </div>
           <div className="md:hidden flex items-center gap-3">
              <Button variant="icon" onClick={onPrev} className="text-white">

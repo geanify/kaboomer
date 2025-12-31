@@ -40,8 +40,19 @@ func New(ytDlpPath string) *Player {
 	}
 }
 
-// GetStatus returns the locally tracked status
+// GetStatus returns the locally tracked status.
+// It also attempts to fetch the current media title from mpv if possible.
 func (p *Player) GetStatus() string {
+	// Try to get actual media title from MPV
+	if title, err := p.GetProperty("media-title"); err == nil {
+		if titleStr, ok := title.(string); ok && titleStr != "" {
+			p.mutex.Lock()
+			p.currentTitle = titleStr
+			p.mutex.Unlock()
+			return titleStr
+		}
+	}
+	
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.currentTitle
@@ -152,12 +163,24 @@ func (p *Player) sendCommand(command []interface{}) error {
 	return err
 }
 
-// Play loads and plays a URL by appending it and then playing it (to avoid clearing playlist)
+// Play loads and plays a URL by appending it and then playing it.
+// It checks if the item is already in the playlist to avoid duplication.
 func (p *Player) Play(url string, title string) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	p.currentTitle = title
+
+	// Check if already in playlist
+	playlist, err := p.GetPlaylist()
+	if err == nil {
+		for i, item := range playlist {
+			if filename, ok := item["filename"].(string); ok && filename == url {
+				// Found it, play this index
+				return p.PlayIndex(i)
+			}
+		}
+	}
 
 	// First append
 	if err := p.append(url, title); err != nil {
@@ -165,7 +188,7 @@ func (p *Player) Play(url string, title string) error {
 	}
 	
 	// Then get playlist size to know the index of the last item
-	playlist, err := p.GetPlaylist()
+	playlist, err = p.GetPlaylist()
 	if err != nil {
 		return err
 	}
