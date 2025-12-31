@@ -8,6 +8,7 @@ interface PlayerControlsProps {
   onNext: () => void;
   onTogglePlay: () => void;
   currentTitle: string;
+  currentArtist?: string;
   position?: number;
   duration?: number;
   volume?: number;
@@ -28,7 +29,8 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({
   onPrev, 
   onNext, 
   onTogglePlay, 
-  currentTitle, 
+  currentTitle,
+  currentArtist, 
   position = 0, 
   duration = 0, 
   volume = 100,
@@ -128,6 +130,11 @@ export const NowPlaying: React.FC<PlayerControlsProps> = ({
               {isLoading && <Loader2 className="w-3 h-3 animate-spin text-spotify-green" />}
               {currentTitle || 'Not Playing'}
             </div>
+            {currentArtist && (
+              <div className="text-xs text-spotify-subtext truncate">
+                {currentArtist}
+              </div>
+            )}
           </div>
           <div className="md:hidden flex items-center gap-3">
              <Button variant="icon" onClick={onPrev} className="text-white">

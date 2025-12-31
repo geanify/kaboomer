@@ -26,6 +26,7 @@ type QueueItem struct {
 	ID        string      `json:"id"`
 	URL       string      `json:"url"`
 	Title     string      `json:"title"`
+	Artist    string      `json:"artist,omitempty"`
 	Status    TrackStatus `json:"status"`
 	LocalPath string      `json:"-"`
 	Error     string      `json:"error,omitempty"`
@@ -112,6 +113,47 @@ func (m *Manager) processItem(item *QueueItem) {
 	}
 }
 
+// ClearQueue clears the queue
+func (m *Manager) ClearQueue() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Optionally we could stop playback or keep playing current song.
+	// Usually "clear queue" means remove upcoming songs.
+	// But what about the current one?
+	// If we just clear the list, the current song will continue playing until end,
+	// then Next() will find nothing. This is reasonable.
+
+	// However, we should keep the current playing item if possible so the UI doesn't break
+	// and so Next/Prev logic (which relies on finding current path in queue) doesn't break.
+
+	// Find current playing item
+	pathProp, err := m.player.GetProperty("path")
+	var currentItem *QueueItem
+	if err == nil {
+		if currentPath, ok := pathProp.(string); ok && currentPath != "" {
+			for _, item := range m.queue {
+				if item.LocalPath == currentPath {
+					currentItem = item
+					break
+				}
+			}
+		}
+	}
+
+	if currentItem != nil {
+		// Keep only the current item
+		m.queue = []*QueueItem{currentItem}
+	} else {
+		// Clear all
+		m.queue = make([]*QueueItem, 0)
+	}
+
+	// Also clear playTarget if it's not the current item
+	if m.playTarget != currentItem {
+		m.playTarget = nil
+	}
+}
+
 // ensureID ensures the item has an ID. If not, generates one or extracts it.
 func (m *Manager) ensureID(url, id string) string {
 	if id != "" {
@@ -127,13 +169,14 @@ func (m *Manager) ensureID(url, id string) string {
 	return hex.EncodeToString(hash[:])[:12]
 }
 
-func (m *Manager) Add(url, title, id string) {
+func (m *Manager) Add(url, title, id, artist string) {
 	m.mu.Lock()
 	id = m.ensureID(url, id)
 	item := &QueueItem{
 		ID:     id,
 		URL:    url,
 		Title:  title,
+		Artist: artist,
 		Status: StatusPending,
 	}
 	m.queue = append(m.queue, item)
@@ -143,13 +186,14 @@ func (m *Manager) Add(url, title, id string) {
 	m.downloadChan <- item
 }
 
-func (m *Manager) Play(url, title, id string) {
+func (m *Manager) Play(url, title, id, artist string) {
 	m.mu.Lock()
 	id = m.ensureID(url, id)
 	item := &QueueItem{
 		ID:     id,
 		URL:    url,
 		Title:  title,
+		Artist: artist,
 		Status: StatusPending,
 	}
 	// Add to end (or replace? user might want history, let's just append)

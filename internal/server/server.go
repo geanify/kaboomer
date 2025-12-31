@@ -38,6 +38,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/api/queue/add", s.handleQueueAdd)
 	mux.HandleFunc("/api/queue/play", s.handleQueuePlay)
 	mux.HandleFunc("/api/queue/add_batch", s.handleQueueAddBatch)
+	mux.HandleFunc("/api/queue/clear", s.handleQueueClear)
 	mux.HandleFunc("/api/play_batch", s.handlePlayBatch)
 
 	log.Printf("Server listening on %s", port)
@@ -66,6 +67,7 @@ type PlayRequest struct {
 	ID    string `json:"id"`
 	URL   string `json:"url"`
 	Title string `json:"title"`
+	Artist string `json:"artist"`
 }
 
 func (s *Server) handlePlay(w http.ResponseWriter, r *http.Request) {
@@ -88,8 +90,12 @@ func (s *Server) handlePlay(w http.ResponseWriter, r *http.Request) {
 	if req.Title == "" {
 		req.Title = "Unknown Track"
 	}
+	
+	if req.Artist == "" {
+		req.Artist = "Unknown Artist"
+	}
 
-	s.manager.Play(req.URL, req.Title, req.ID)
+	s.manager.Play(req.URL, req.Title, req.ID, req.Artist)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -138,19 +144,32 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
 		"current_title": s.manager.GetStatus(),
+		"current_artist": "", // New field
 		"position":      0.0,
 		"duration":      0.0,
 		"volume":        100.0,
 		"is_loading":    false,
 	}
 
+	// Try to find artist from queue based on current title or target
+	currentTitle := status["current_title"].(string)
+	
 	if target := s.manager.GetPlayTarget(); target != nil {
 		status["is_loading"] = true
-		// Override title if idle/empty or if we just assume user wants to see what's coming
-		// Let's just override it if it's not playing something valid or to indicate loading target.
-		// Actually, if we are loading, we might want to show "Loading: X"
-		// But let's just send the title and let frontend handle "Loading..." text via is_loading
 		status["current_title"] = target.Title
+		status["current_artist"] = target.Artist
+	} else if currentTitle != "Idle" {
+		// Look up artist in queue
+		// This is inefficient but queue is small
+		// Better: Manager could track current item
+		queue := s.manager.GetQueue()
+		for _, item := range queue {
+			// Title might match filename or title
+			if item.Title == currentTitle || item.LocalPath == currentTitle /* heuristic */ {
+				status["current_artist"] = item.Artist
+				break
+			}
+		}
 	}
 
 	if pos, err := s.manager.GetProperty("time-pos"); err == nil {
@@ -185,6 +204,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 	type queueResponseItem struct {
 		ID       string `json:"id"`
 		Title    string `json:"title"`
+		Artist   string `json:"artist"`
 		Status   string `json:"status"`
 		Current  bool   `json:"current"`
 		Filename string `json:"filename"` // Frontend uses this key sometimes
@@ -195,6 +215,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		resp[i] = queueResponseItem{
 			ID:       item.ID,
 			Title:    item.Title,
+			Artist:   item.Artist,
 			Status:   string(item.Status),
 			Current:  item.Title == currentTitle, // Rough heuristic
 			Filename: item.Title, // Fallback
@@ -222,7 +243,11 @@ func (s *Server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.manager.Add(req.URL, req.Title, req.ID)
+	if req.Artist == "" {
+		req.Artist = "Unknown Artist"
+	}
+
+	s.manager.Add(req.URL, req.Title, req.ID, req.Artist)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -251,6 +276,16 @@ func (s *Server) handleQueuePlay(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) handleQueueClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.manager.ClearQueue()
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) handleQueueAddBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -267,7 +302,10 @@ func (s *Server) handleQueueAddBatch(w http.ResponseWriter, r *http.Request) {
 		if req.URL == "" {
 			continue
 		}
-		s.manager.Add(req.URL, req.Title, req.ID)
+		if req.Artist == "" {
+			req.Artist = "Unknown Artist"
+		}
+		s.manager.Add(req.URL, req.Title, req.ID, req.Artist)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -290,11 +328,17 @@ func (s *Server) handlePlayBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Play first
-	s.manager.Play(reqs[0].URL, reqs[0].Title, reqs[0].ID)
+	if reqs[0].Artist == "" {
+		reqs[0].Artist = "Unknown Artist"
+	}
+	s.manager.Play(reqs[0].URL, reqs[0].Title, reqs[0].ID, reqs[0].Artist)
 	
 	// Add rest
 	for i := 1; i < len(reqs); i++ {
-		s.manager.Add(reqs[i].URL, reqs[i].Title, reqs[i].ID)
+		if reqs[i].Artist == "" {
+			reqs[i].Artist = "Unknown Artist"
+		}
+		s.manager.Add(reqs[i].URL, reqs[i].Title, reqs[i].ID, reqs[i].Artist)
 	}
 
 	w.WriteHeader(http.StatusOK)
