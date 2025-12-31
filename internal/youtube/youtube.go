@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type Service struct {
@@ -41,6 +43,27 @@ func New(cookiesPath, ytDlpPath string) *Service {
 		cookiesPath: cookiesPath,
 		ytDlpPath:   ytDlpPath,
 	}
+}
+
+// ExtractID tries to find the video ID from a URL
+func (s *Service) ExtractID(videoURL string) string {
+	// Simple heuristic for standard youtube URLs
+	u, err := url.Parse(videoURL)
+	if err == nil {
+		if u.Host == "youtu.be" {
+			return strings.TrimPrefix(u.Path, "/")
+		}
+		if strings.Contains(u.Host, "youtube.com") {
+			q := u.Query()
+			if v := q.Get("v"); v != "" {
+				return v
+			}
+		}
+	}
+	// Fallback: assume the whole string might be an ID if it's short? 
+	// Or use yt-dlp to simulate finding it (expensive).
+	// For now, if heuristic fails, return empty or hash.
+	return ""
 }
 
 // Search performs a search using yt-dlp

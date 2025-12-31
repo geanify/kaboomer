@@ -27,7 +27,7 @@ function App() {
       await fetch('/api/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
       });
       // Clear results after playing (optional)
       // setSearchResults([]);
@@ -42,7 +42,7 @@ function App() {
       await fetch('/api/queue/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: track.url, title: track.title }),
+        body: JSON.stringify({ url: track.url, title: track.title, id: track.id }),
       });
       updateStatus();
     } catch (err) {
@@ -55,7 +55,7 @@ function App() {
       await fetch('/api/play_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
       });
       updateStatus();
     } catch (err) {
@@ -68,7 +68,7 @@ function App() {
       await fetch('/api/queue/add_batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title }))),
+        body: JSON.stringify(tracks.map(t => ({ url: t.url, title: t.title, id: t.id }))),
       });
       updateStatus();
     } catch (err) {
